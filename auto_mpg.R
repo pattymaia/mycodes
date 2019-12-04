@@ -186,6 +186,30 @@ summary(auto_mod3)
 #F-statistic: 498.3 on 2 and 389 DF,  p-value: < 2.2e-16
 
 #New regression considering all variables. **** Understand this!!!!
-auto_mod4<- lm(mpg~weight+cylinders+horsepower+fuel+displacement+model_year+name+orogin, data=auto_mpg3)
+auto_mod4<- lm(mpg~weight+cylinders+horsepower+fuel+displacement+model_year+orogin, data=auto_mpg3)
 summary(auto_mod4)
+
+#lm(formula = mpg ~ weight + cylinders + horsepower + fuel + displacement + 
+#     model_year + orogin, data = auto_mpg3)
+
+#Residuals:
+#  Min      1Q  Median      3Q     Max 
+#-9.7079 -2.1733 -0.2337  1.8810 13.1765 
+
+#Coefficients:
+#  Estimate Std. Error t value Pr(>|t|)    
+#(Intercept)  -1.483e+01  4.260e+00  -3.482 0.000556 ***
+#  weight       -6.077e-03  5.938e-04 -10.235  < 2e-16 ***
+#  cylinders    -5.201e-01  3.232e-01  -1.609 0.108354    
+#  horsepower   -2.071e-02  1.143e-02  -1.811 0.070939 .  
+#  fuel         -7.739e-02  8.835e-02  -0.876 0.381642    
+#  displacement  2.374e-02  9.050e-03   2.623 0.009063 ** 
+#  model_year    7.279e-01  5.554e-02  13.104  < 2e-16 ***
+#  orogin        1.459e+00  2.802e-01   5.205 3.17e-07 ***
+#  ---
+#  Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#Residual standard error: 3.327 on 384 degrees of freedom
+#Multiple R-squared:  0.8215,	Adjusted R-squared:  0.8183 
+#F-statistic: 252.5 on 7 and 384 DF,  p-value: < 2.2e-16
 
