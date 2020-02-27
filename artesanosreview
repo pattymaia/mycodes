@@ -1,0 +1,395 @@
+#Author: Patricia de Melo Maia
+#Collected and imputed unstructured data, and I made a sentiment analysis to check customers' reviews about a specific restaurant. 
+#The data was collected from the Yelp web page, and I only use reviews made in 2019.
+
+###Call libraries
+library(textreadr)
+library(textshape)
+library(stringr)
+library(dplyr)
+library(tidyverse)
+library(tidytext)
+library(reshape2)
+library(wordcloud)
+library(widyr)
+library(tidyr)
+library(scales)
+library(igraph)
+library(ggraph)
+library(plotly)
+
+#Importing all .txt files from one directory # a txt works like a csv file with multiple rows
+setwd("/Users/patty/OneDrive/Documents/MSBAN/Text Analytics/Report about Artesano")
+nm <- list.files(path="/Users/patty/OneDrive/Documents/MSBAN/Text Analytics/Report about Artesano")
+
+#using read document to import the data:
+my_data <- read_document(file=nm[2]) #This comes out as a vector
+my_data_together <- paste(my_data, collapse = " ") # This will give us a concatenated vector
+my_txt_text <- my_data_together
+
+#Putting the vector in a data frame
+mydf <- data_frame(text=my_txt_text)
+print(mydf)
+
+#Tokenizing and count the frenquency of tokens in mydf dataframe
+token_list <- mydf %>%
+  unnest_tokens(word, text)
+  count(word, sort=TRUE)
+print(token_list)
+
+#word   
+#<chr>  
+#1 the    
+#2 food   
+#3 here   
+#4 is     
+#5 good   
+#6 their  
+#7 motto  
+#8 is     
+#9 latin  
+#10 comfort
+# ... with 5,770 more rows
+
+
+#Remove stop words
+pk<-data(stop_words)
+nonstop_tokens <- mydf %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>% 
+  count(word, sort=TRUE)
+
+#Creating a customize data with words I wanna remove
+cust_stop<- data_frame(
+  word = c("3", "2", "4","5", "10","15","24","9","09","1","100","14","18","1st","22","3.5","38","4.8","50","7","75" ,"9.99", "najib","yelp", "doug","grubhub", "pierre"),
+  lexicon= rep("custom", each=27)
+)#closing data_frame
+
+#Remove other customize words
+nonstop_tokens <- mydf %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>%
+  anti_join(cust_stop) %>%
+  count(word, sort=TRUE)
+
+
+nonstop_tokens%>%  
+  with(wordcloud(word, n, max.words = 100,rot.per=0, fixed.asp=FALSE))
+
+#Token frequency plot bar graphic with first 10 words.
+nonstop_tokens10<- nonstop_tokens%>%
+  top_n(10, n)%>%
+  mutate(word2 = fct_reorder(word, n))
+
+ggplot(nonstop_tokens10, aes(x=word2, y=n)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top 10 words frequency in The Yelp",
+    x = "word",
+    y = "Counts"
+  )
+  
+##########################################################
+###########Sentiment in tidytext()########################
+
+# Join nonstop_tokens and the NRC sentiment dictionary
+sent_nrc <- nonstop_tokens %>% 
+  inner_join(get_sentiments("nrc"))%>%
+  count(sentiment) %>% 
+  mutate(sentiment2 = fct_reorder(sentiment, n))
+sent_nrc
+
+# OUTPUT: A tibble: 10 x 2
+#sentiment        n
+#<chr>        <int>
+#1 positive       117
+#2 trust           60
+#3 negative        56
+#4 anticipation    53
+#5 joy             51
+#6 sadness         24
+#7 surprise        21
+#8 anger           16
+#9 fear            15
+#10 disgust         14
+
+#Plot NCR sentiment 
+ggplot(sent_nrc, aes(x=sentiment2, y=n, fill=sentiment)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  labs(
+    title = "Sentiment's frequencies base on NRC",
+    x = "sentiment",
+    y = "Counts"
+  )
+
+#Create a new set with words and their sentiment
+word_nrc <- nonstop_tokens %>% 
+  inner_join(get_sentiments("nrc"))
+
+word_nrc %>%
+  group_by(sentiment) %>%
+  top_n(10,word) %>%
+  ungroup() %>%
+  mutate(word2=reorder(word, n)) %>%
+  ggplot(aes(word2, n, fill=sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y")+
+  labs(title= "Top 10 words in each sentiment base on NCR", y="Contribution to sentiment", x=NULL)+
+  coord_flip()
+
+#Checking the words with sentiments: Positive, Joy and Trust
+words_positive <- nonstop_tokens %>% 
+  inner_join(get_sentiments("nrc")) %>% 
+  filter(sentiment %in% c("positive", "joy", "trust"))
+
+words_positive %>%
+  group_by(sentiment) %>%
+  top_n(10,word) %>%
+  ungroup() %>%
+  mutate(word2=reorder(word, n)) %>%
+  ggplot(aes(word2, n, fill=sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y")+
+  labs(y="Contribution to sentiment", x=NULL)+
+  coord_flip()
+
+#Checking the words with sentiments:Negative, Anger and Disgust
+words_negative <- nonstop_tokens %>% 
+  inner_join(get_sentiments("nrc")) %>% 
+  filter(sentiment %in% c("negative", "anger", "disgust"))
+
+words_negative %>%
+  group_by(sentiment) %>%
+  top_n(5,word) %>%
+  ungroup() %>%
+  mutate(word2=reorder(word, n)) %>%
+  ggplot(aes(word2, n, fill=sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y")+
+  labs(y="Contribution to sentiment", x=NULL)+
+  coord_flip()
+
+
+#New NCR analyse using word cloud
+#plot
+word_nrc %>%
+  count(word, sentiment, sort=TRUE) %>%
+  acast(word ~sentiment, value.var="n", fill=0) %>%
+  comparison.cloud(colors = c("orange", "red", "black", "green", "pink","purple", "pink", "grey", "blue", "black"),
+                   max.words=100,
+                   scale=c(0.5,1.5),
+                   fixed.asp=TRUE,
+                   title.size=0.7)  
+
+
+
+## Append the afinn sentiment dictionary
+word_affin<-nonstop_tokens %>% 
+  inner_join(get_sentiments("afinn")) %>%
+  group_by(word) %>%  
+  summarise(sentiment = sum(value)) %>%  
+  mutate(method = "AFINN")
+
+ggplot(word_affin, aes(x=word, y=sentiment, fill= method)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~method, ncol = 1, scales = "free_y")+
+  labs(
+    title = "Sentiment analyse according to Affin",
+    x = NULL,
+    y = NULL
+  )
+
+## Append the Bing dictionary
+bing_counts <- nonstop_tokens %>%
+  inner_join(get_sentiments("bing"))%>%
+#  count(word, sentiment, sort=TRUE) %>%
+  acast(word ~sentiment, value.var="n", fill=0) %>%
+  comparison.cloud(colors = c("red","blue"),
+                   max.words=100)
+
+
+###Join Bing and NRC dictionaries
+bing_and_nrc <- bind_rows(
+   nonstop_tokens%>%
+    inner_join(get_sentiments("bing"))%>%
+    mutate(method = "Bing et al."),
+  nonstop_tokens %>%
+    inner_join(get_sentiments("nrc") %>%
+                 filter(sentiment %in% c("positive", "negative"))) %>%
+    mutate(method = "NRC")) %>%
+    spread(sentiment, n, fill=0) %>%
+    mutate(sentiment = positive-negative)
+
+### Join Affin with bing and NRC and plotting
+bind_rows(word_affin, bing_and_nrc) %>%
+  ggplot(aes(word, sentiment, fill=method))+
+  geom_col(show.legend=FALSE)+
+  facet_wrap(~method, ncol =1, scales= "free_y")+
+  labs(
+    title = "Comparing three sentiment lexicons ",
+    x = NULL,
+    y = "Sentiment"
+  )
+
+##############################################################
+############### N-grams and tokenizing########################
+
+#Creating Bigrams
+artesano_bigrams <- mydf %>%
+  unnest_tokens(bigram, text, token = "ngrams", n=2) %>%
+  count(bigram, sort = TRUE)
+
+#to remove stop words from the bigram data, we need to use the separate function:
+artbio_separated <- artesano_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+bigrams_filtered <- artbio_separated %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(!word1 %in% cust_stop$word) %>%
+  filter(!word2 %in% cust_stop$word)
+
+
+#creating the new bigram, "no-stop-words":
+bigram_counts <- bigrams_filtered %>%
+  count(word1, word2, sort = TRUE)
+
+#Using Biograms to Provide Context in Sentiment Analyses
+#Checking negative context
+negation_tokens <- c("no", "never", "without", "not")
+
+bigram_counts%>%
+  filter(word1 %in% negation_tokens)%>%
+  count(word1, word2, sort= TRUE)
+# A tibble: 0 x 3
+# ... with 3 variables: word1 <chr>, word2 <chr>, n <int>
+
+#Chencking other words
+bigram_counts%>%
+  filter(word2 == "artesano")%>%
+  count(word1, word2, sort= TRUE)
+# A tibble: 8 x 3
+#word1    word2        n
+#<chr>    <chr>    <int>
+#1 artesano bills        1
+#2 artesano bowl         1
+#3 artesano chicken      1
+#4 artesano deliver      1
+#5 artesano required     1
+#6 artesano saved        1
+#7 artesano team         1
+#8 artesano tonight      1
+
+bigram_counts%>%
+  filter(word1 == "delicious")%>%
+  count(word1, word2, sort= TRUE)
+# A tibble: 11 x 3
+#word1     word2          n
+#<chr>     <chr>      <int>
+#1 delicious chopped        1
+#2 delicious comfort        1
+#3 delicious dishes         1
+#4 delicious flavorful      1
+#5 delicious food           1
+#6 delicious fries          1
+#7 delicious healthy        1
+#8 delicious meal           1
+#9 delicious sandwiches     1
+#10 delicious sangrias      1
+#11 delicious tres          1
+
+
+##############################################################
+#############Pairwise correlations between words##############
+#Checking correlation between thoses words
+word_cors_art <- bigram_counts %>%
+  group_by(word1) %>%
+  filter(n() >= 0.01) %>% 
+  pairwise_cor(word1, word2, sort=TRUE)
+
+word_cors_art %>%
+  filter(item1 == "delicious") 
+## A tibble: 378 x 3
+#item1     item2       correlation
+#<chr>     <chr>             <dbl>
+#1 delicious american          0.339
+#2 delicious bland             0.297
+#3 delicious comfort           0.297
+#4 delicious deliver           0.297
+#5 delicious french            0.297
+#6 delicious home              0.297
+#7 delicious main              0.297
+#8 delicious outstanding       0.297
+#9 delicious peruvian          0.297
+#10 delicious potato           0.297
+# ... with 368 more rows
+
+word_cors_art %>%
+  filter(item1 == "food")  
+# A tibble: 378 x 3
+#item1 item2      correlation
+#<chr> <chr>            <dbl>
+#1 food  fare           0.445  
+#2 food  personally     0.445  
+#3 food  takeout        0.445  
+#4 food  provide        0.311  
+#5 food  team           0.311  
+#6 food  absolutely     0.250  
+#7 food  absolute      -0.00611
+#8 food  affordable    -0.00611
+#9 food  agua          -0.00611
+#10 food  aguas        -0.00611
+# ... with 368 more rows
+
+word_cors_art %>%
+  filter(item1 == "love")  
+# A tibble: 378 x 3
+#item1 item2        correlation
+#<chr> <chr>              <dbl>
+#1 love  called             0.576
+#2 love  chose              0.576
+#3 love  contacted          0.576
+#4 love  eyeing             0.576
+#5 love  failed             0.576
+#6 love  found              0.576
+#7 love  quantity           0.576
+#8 love  rediscovered       0.576
+#9 love  stuff              0.576
+#10 love  american          0.328
+# ... with 368 more rows
+
+##creating barcharts for correlatoins
+word_cors_art %>%
+  filter(item1 %in% c("artesano")) %>% 
+  group_by(item1) %>%
+  top_n(5) %>%
+  ungroup() %>%
+  mutate(item2 = reorder(item2, correlation)) %>%
+  ggplot(aes(item2, correlation)) +
+  geom_bar(stat = "identity")+
+  facet_wrap(~item1, scales = "free")+
+  coord_flip()
+
+word_cors_art %>%
+  filter(item1 %in% c("food")) %>% 
+  group_by(item1) %>%
+  top_n(6) %>%
+  ungroup() %>%
+  mutate(item2 = reorder(item2, correlation)) %>%
+  ggplot(aes(item2, correlation)) +
+  geom_bar(stat = "identity")+
+  facet_wrap(~item1, scales = "free")+
+  coord_flip()
+
+word_cors_art %>%
+  filter(item1 %in% c("love")) %>% 
+  group_by(item1) %>%
+  top_n(15) %>%
+  ungroup() %>%
+  mutate(item2 = reorder(item2, correlation)) %>%
+  ggplot(aes(item2, correlation)) +
+  geom_bar(stat = "identity")+
+  facet_wrap(~item1, scales = "free")+
+  coord_flip()
